@@ -13,7 +13,7 @@ model_name="model."${job_name}
 job_file="scripts/train."${job_name}".sh"
 decode_file=${job_name}".test.en"
 
-python nmt.py \
+python3 nmt.py \
     --mode train \
     --vocab data/iwslt.vocab.bin \
     --save_to models/${model_name} \
@@ -32,7 +32,7 @@ python nmt.py \
     --dev_src ${dev_src} \
     --dev_tgt ${dev_tgt}
 
-python nmt.py \
+python3 nmt.py \
     --mode test \
     --load_model models/${model_name}.bin \
     --beam_size 5 \

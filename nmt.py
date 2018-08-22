@@ -166,7 +166,7 @@ class NMT(nn.Module):
         output, _ = pad_packed_sequence(output)
 
         dec_init_cell = self.decoder_cell_init(torch.cat([last_cell[0], last_cell[1]], 1))
-        dec_init_state = F.tanh(dec_init_cell)
+        dec_init_state = torch.tanh(dec_init_cell)
 
         return output, (dec_init_state, dec_init_cell)
 
@@ -205,7 +205,7 @@ class NMT(nn.Module):
 
             ctx_t, alpha_t = self.dot_prod_attention(h_t, src_encoding, src_encoding_att_linear)
 
-            att_t = F.tanh(self.att_vec_linear(torch.cat([h_t, ctx_t], 1)))   # E.q. (5)
+            att_t = torch.tanh(self.att_vec_linear(torch.cat([h_t, ctx_t], 1)))   # E.q. (5)
             att_t = self.dropout(att_t)
 
             score_t = self.readout(att_t)   # E.q. (6)
@@ -272,7 +272,7 @@ class NMT(nn.Module):
 
             ctx_t, alpha_t = self.dot_prod_attention(h_t, expanded_src_encoding.permute(1, 0, 2), expanded_src_encoding_att_linear.permute(1, 0, 2))
 
-            att_t = F.tanh(self.att_vec_linear(torch.cat([h_t, ctx_t], 1)))
+            att_t = torch.tanh(self.att_vec_linear(torch.cat([h_t, ctx_t], 1)))
             att_t = self.dropout(att_t)
 
             score_t = self.readout(att_t)
@@ -388,7 +388,7 @@ class NMT(nn.Module):
 
             ctx_t, alpha_t = self.dot_prod_attention(h_t, src_encoding, src_encoding_att_linear)
 
-            att_t = F.tanh(self.att_vec_linear(torch.cat([h_t, ctx_t], 1)))  # E.q. (5)
+            att_t = torch.tanh(self.att_vec_linear(torch.cat([h_t, ctx_t], 1)))  # E.q. (5)
             att_t = self.dropout(att_t)
 
             score_t = self.readout(att_t)  # E.q. (6)
@@ -430,7 +430,7 @@ class NMT(nn.Module):
     def attention(self, h_t, src_encoding, src_linear_for_att):
         # (1, batch_size, attention_size) + (src_sent_len, batch_size, attention_size) =>
         # (src_sent_len, batch_size, attention_size)
-        att_hidden = F.tanh(self.att_h_linear(h_t).unsqueeze(0).expand_as(src_linear_for_att) + src_linear_for_att)
+        att_hidden = torch.tanh(self.att_h_linear(h_t).unsqueeze(0).expand_as(src_linear_for_att) + src_linear_for_att)
 
         # (batch_size, src_sent_len)
         att_weights = F.softmax(tensor_transform(self.att_vec_linear, att_hidden).squeeze(2).permute(1, 0))
@@ -524,8 +524,8 @@ def init_training(args):
 
     vocab_mask = torch.ones(len(vocab.tgt))
     vocab_mask[vocab.tgt['<pad>']] = 0
-    nll_loss = nn.NLLLoss(weight=vocab_mask, size_average=False)
-    cross_entropy_loss = nn.CrossEntropyLoss(weight=vocab_mask, size_average=False)
+    nll_loss = nn.NLLLoss(weight=vocab_mask, reduction='sum')
+    cross_entropy_loss = nn.CrossEntropyLoss(weight=vocab_mask, reduction='sum')
 
     if args.cuda:
         model = model.cuda()

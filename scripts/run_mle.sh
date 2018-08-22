@@ -24,13 +24,13 @@ python3 nmt.py \
     --hidden_size 256 \
     --embed_size 256 \
     --uniform_init 0.1 \
-    --dropout 0.2 \
     --clip_grad 5.0 \
     --lr_decay 0.5 \
     --train_src ${train_src} \
     --train_tgt ${train_tgt} \
     --dev_src ${dev_src} \
     --dev_tgt ${dev_tgt}
+    # --dropout 0.2 \
 
 python3 nmt.py \
     --mode test \

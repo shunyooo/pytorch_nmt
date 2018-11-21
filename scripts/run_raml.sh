@@ -14,7 +14,7 @@ job_file="scripts/train."${job_name}".sh"
 decode_file=${job_name}".test.en"
 temp="0.6"
 
-python nmt.py \
+python3 nmt.py \
     --mode raml_train \
     --vocab data/iwslt.vocab.bin \
     --save_to models/${model_name} \
@@ -26,7 +26,6 @@ python nmt.py \
     --hidden_size 256 \
     --embed_size 256 \
     --uniform_init 0.1 \
-    --dropout 0.2 \
     --clip_grad 5.0 \
     --lr_decay 0.5 \
     --temp ${temp} \
@@ -35,8 +34,9 @@ python nmt.py \
     --train_tgt ${train_tgt} \
     --dev_src ${dev_src} \
     --dev_tgt ${dev_tgt}
+    # --dropout 0.2 \
 
-python nmt.py \
+python3 nmt.py \
     --mode test \
     --load_model models/${model_name}.bin \
     --beam_size 5 \

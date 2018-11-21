@@ -1,36 +1,52 @@
-**A neural machine translation model written in pytorch.**
+こちらより。
 
-With 256-dimensional LSTM hidden size, it achieves a training speed of 14000 words/sec and 26.9 BLEU score on the IWSLT 2014 Germen-English dataset (Ranzato et al., 2015).
+> https://github.com/pcyin/pytorch_nmt
 
-## File Structure
+> https://github.com/pcyin/pytorch_basic_nmt
 
-* `nmt.py`: main file
-* `vocab.py`: script used to generate `.bin` vocabulary file from parallel corpus
-* `util.py`: script containing helper functions
-* `run_raml_exp.py|test_raml_models.py`: helper scripts to train|test RAML models with different temperature settings (refer to [Norouzi et al., 2016] for details)
 
-## Usage
+**Pytorchで書かれたニューラル翻訳モデル。**
 
-* Generate Vocabulary Files
+256次元隠れサイズのLSTMでは、IWSLT 2014 Germen-Englishデータセット（Ranzato et al。、2015）で14000語/秒の学習速度と26.9 BLEUスコアを達成します。
+
+
+
+## ファイル構造
+
+- `nmt.py`: main file
+- `vocab.py`: パラレルコーパスから、`.bin`語彙ファイルを生成するスクリプト
+- `util.py`: ヘルパー系
+- `run_raml_exp.py|test_raml_models.py`: 様々な温度設定のRAMLモデルをテストするヘルパースクリプト（詳細については、[Norouzi et al。、2016]を参照してください）
+
+
+
+## 使い方
+
+- 語彙ファイルの生成
 
 ```
 python vocab.py
 ```
 
-* Vanilla Maximum Likelihood Training
+- シンプルな最尤法による実行
 
 ```
 . scripts/run_mle.sh
 ```
 
-* Reward Augmented Maximum Likelihood Training (Norouzi et al., 2016)
+- RAML用のサンプルファイル生成
+
+```
+. scripts/gen_samples.sh
+```
+
+- 報酬による最尤法 (Norouzi et al., 2016)
 
 ```
 . scripts/run_raml.sh
 ```
 
-* Reinforcement Learning (Coming soon)
+- Reinforcement Learning (Coming soon)
 
-## TODO:
 
-* batched decoding as in openNMT
+

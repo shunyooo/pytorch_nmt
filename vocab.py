@@ -17,7 +17,7 @@ class VocabEntry(object):
         self.word2id['</s>'] = 2
         self.word2id['<unk>'] = 3
 
-        self.id2word = {v: k for k, v in self.word2id.iteritems()}
+        self.id2word = {v: k for k, v in self.word2id.items()}
 
     def __getitem__(self, word):
         return self.word2id.get(word, self.unk_id)

@@ -1,4 +1,7 @@
 from __future__ import print_function
+
+import time
+
 from nltk.translate.bleu_score import sentence_bleu
 from nltk.translate.bleu_score import SmoothingFunction
 import sys
@@ -106,7 +109,10 @@ def sample_ngram(args):
     if smooth_bleu:
         sm_func = SmoothingFunction().method3
 
-    for src_sent, tgt_sent in zip(src_sents, tgt_sents):
+    begin_time = time.time()
+
+    print('sample_ngram', len(src_sents), len(tgt_sents), f_out)
+    for i, (src_sent, tgt_sent) in enumerate(zip(src_sents, tgt_sents)):
         src_sent = ' '.join(src_sent)
 
         tgt_len = len(tgt_sent)
@@ -152,9 +158,12 @@ def sample_ngram(args):
         print('*' * 50, file=f_out)
         print('source: ' + src_sent, file=f_out)
         print('%d samples' % len(tgt_samples), file=f_out)
-        for i in tgt_ranks:
-            print('%s ||| %f' % (tgt_samples[i], rewards[i]), file=f_out)
+        for _i in tgt_ranks:
+            print('%s ||| %f' % (tgt_samples[_i], rewards[_i]), file=f_out)
         print('*' * 50, file=f_out)
+
+        if i % 1000 == 0 and i != 0:
+            print('done %d [%d s].' % (i, time.time() - begin_time))
 
     f_out.close()
 

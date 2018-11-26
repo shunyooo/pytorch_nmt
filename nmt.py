@@ -52,6 +52,8 @@ def init_config():
     parser.add_argument('--valid_niter', default=500, type=int, help='every n iterations to perform validation')
     parser.add_argument('--valid_metric', default='bleu', choices=['bleu', 'ppl', 'word_acc', 'sent_acc'], help='metric used for validation')
     parser.add_argument('--log_every', default=50, type=int, help='every n iterations to log training statistics')
+    parser.add_argument('--train_log_file', default='model', type=str, help='学習時のスコア保存')
+    parser.add_argument('--validation_log_file', default='model', type=str, help='テスト時のスコア保存')
     parser.add_argument('--load_model', default=None, type=str, help='load a pre-trained model')
     parser.add_argument('--save_to', default='model', type=str, help='save trained model to')
     parser.add_argument('--save_model_after', default=2, help='save the model only after n validation iterations')
@@ -555,117 +557,123 @@ def train(args):
     train_time = begin_time = time.time()
     print('begin Maximum Likelihood training')
 
-    while True:
-        epoch += 1
-        for src_sents, tgt_sents in data_iter(train_data, batch_size=args.batch_size):
-            train_iter += 1
+    with open(args.train_log_file, "w") as train_output, open(args.validation_log_file, "w") as validation_output:
 
-            src_sents_var = to_input_variable(src_sents, vocab.src, cuda=args.cuda)
-            tgt_sents_var = to_input_variable(tgt_sents, vocab.tgt, cuda=args.cuda)
+        while True:
+            epoch += 1
+            for src_sents, tgt_sents in data_iter(train_data, batch_size=args.batch_size):
+                train_iter += 1
 
-            batch_size = len(src_sents)
-            src_sents_len = [len(s) for s in src_sents]
-            pred_tgt_word_num = sum(len(s[1:]) for s in tgt_sents) # omitting leading `<s>`
+                src_sents_var = to_input_variable(src_sents, vocab.src, cuda=args.cuda)
+                tgt_sents_var = to_input_variable(tgt_sents, vocab.tgt, cuda=args.cuda)
 
-            optimizer.zero_grad()
+                batch_size = len(src_sents)
+                src_sents_len = [len(s) for s in src_sents]
+                pred_tgt_word_num = sum(len(s[1:]) for s in tgt_sents) # omitting leading `<s>`
 
-            # (tgt_sent_len, batch_size, tgt_vocab_size)
-            scores = model(src_sents_var, src_sents_len, tgt_sents_var[:-1])
+                optimizer.zero_grad()
 
-            word_loss = cross_entropy_loss(scores.view(-1, scores.size(2)), tgt_sents_var[1:].view(-1))
-            loss = word_loss / batch_size
-            word_loss_val = word_loss.item()
-            loss_val = loss.item()
+                # (tgt_sent_len, batch_size, tgt_vocab_size)
+                scores = model(src_sents_var, src_sents_len, tgt_sents_var[:-1])
 
-            loss.backward()
-            # clip gradient
-            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
-            optimizer.step()
+                word_loss = cross_entropy_loss(scores.view(-1, scores.size(2)), tgt_sents_var[1:].view(-1))
+                loss = word_loss / batch_size
+                word_loss_val = word_loss.item()
+                loss_val = loss.item()
 
-            report_loss += word_loss_val
-            cum_loss += word_loss_val
-            report_tgt_words += pred_tgt_word_num
-            cum_tgt_words += pred_tgt_word_num
-            report_examples += batch_size
-            cum_examples += batch_size
-            cum_batches += batch_size
+                loss.backward()
+                # clip gradient
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+                optimizer.step()
 
-            if train_iter % args.log_every == 0:
-                print('epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f ' \
-                      'cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
-                                                                                         report_loss / report_examples,
-                                                                                         np.exp(report_loss / report_tgt_words),
-                                                                                         cum_examples,
-                                                                                         report_tgt_words / (time.time() - train_time),
-                                                                                         time.time() - begin_time), file=sys.stderr)
+                report_loss += word_loss_val
+                cum_loss += word_loss_val
+                report_tgt_words += pred_tgt_word_num
+                cum_tgt_words += pred_tgt_word_num
+                report_examples += batch_size
+                cum_examples += batch_size
+                cum_batches += batch_size
 
-                train_time = time.time()
-                report_loss = report_tgt_words = report_examples = 0.
+                if train_iter % args.log_every == 0:
+                    _log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f ' \
+                          'cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
+                                                                                             report_loss / report_examples,
+                                                                                             np.exp(report_loss / report_tgt_words),
+                                                                                             cum_examples,
+                                                                                             report_tgt_words / (time.time() - train_time),
+                                                                                             time.time() - begin_time)
+                    print(_log)
+                    print(_log, file=train_output)
 
-            # perform validation
-            if train_iter % args.valid_niter == 0:
-                print('epoch %d, iter %d, cum. loss %.2f, cum. ppl %.2f cum. examples %d' % (epoch, train_iter,
-                                                                                         cum_loss / cum_batches,
-                                                                                         np.exp(cum_loss / cum_tgt_words),
-                                                                                         cum_examples), file=sys.stderr)
+                    train_time = time.time()
+                    report_loss = report_tgt_words = report_examples = 0.
 
-                cum_loss = cum_batches = cum_tgt_words = 0.
-                valid_num += 1
+                # perform validation
+                if train_iter % args.valid_niter == 0:
+                    print('epoch %d, iter %d, cum. loss %.2f, cum. ppl %.2f cum. examples %d' % (epoch, train_iter,
+                                                                                             cum_loss / cum_batches,
+                                                                                             np.exp(cum_loss / cum_tgt_words),
+                                                                                             cum_examples), file=sys.stderr)
 
-                print('begin validation ...', file=sys.stderr)
-                model.eval()
+                    cum_loss = cum_batches = cum_tgt_words = 0.
+                    valid_num += 1
 
-                # compute dev. ppl and bleu
+                    print('begin validation ...', file=sys.stderr)
+                    model.eval()
 
-                dev_loss = evaluate_loss(model, dev_data, cross_entropy_loss)
-                dev_ppl = np.exp(dev_loss)
+                    # compute dev. ppl and bleu
 
-                if args.valid_metric in ['bleu', 'word_acc', 'sent_acc']:
-                    dev_hyps = decode(model, dev_data)
-                    dev_hyps = [hyps[0] for hyps in dev_hyps]
-                    if args.valid_metric == 'bleu':
-                        valid_metric = get_bleu([tgt for src, tgt in dev_data], dev_hyps)
+                    dev_loss = evaluate_loss(model, dev_data, cross_entropy_loss)
+                    dev_ppl = np.exp(dev_loss)
+
+                    if args.valid_metric in ['bleu', 'word_acc', 'sent_acc']:
+                        dev_hyps = decode(model, dev_data)
+                        dev_hyps = [hyps[0] for hyps in dev_hyps]
+                        if args.valid_metric == 'bleu':
+                            valid_metric = get_bleu([tgt for src, tgt in dev_data], dev_hyps)
+                        else:
+                            valid_metric = get_acc([tgt for src, tgt in dev_data], dev_hyps, acc_type=args.valid_metric)
+                        _log = 'validation: iter %d, dev. ppl %f, dev. %s %f' % (train_iter, dev_ppl, args.valid_metric, valid_metric)
+                        print(_log, file=sys.stderr)
+                        print(_log, file=validation_output)
+
                     else:
-                        valid_metric = get_acc([tgt for src, tgt in dev_data], dev_hyps, acc_type=args.valid_metric)
-                    print('validation: iter %d, dev. ppl %f, dev. %s %f' % (train_iter, dev_ppl, args.valid_metric, valid_metric),
-                          file=sys.stderr)
-                else:
-                    valid_metric = -dev_ppl
-                    print('validation: iter %d, dev. ppl %f' % (train_iter, dev_ppl),
-                          file=sys.stderr)
+                        valid_metric = -dev_ppl
+                        print('validation: iter %d, dev. ppl %f' % (train_iter, dev_ppl),
+                              file=sys.stderr)
 
-                model.train()
+                    model.train()
 
-                is_better = len(hist_valid_scores) == 0 or valid_metric > max(hist_valid_scores)
-                is_better_than_last = len(hist_valid_scores) == 0 or valid_metric > hist_valid_scores[-1]
-                hist_valid_scores.append(valid_metric)
-
-                if valid_num > args.save_model_after:
-                    model_file = args.save_to + '.iter%d.bin' % train_iter
-                    print('save model to [%s]' % model_file, file=sys.stderr)
-                    model.save(model_file)
-
-                if (not is_better_than_last) and args.lr_decay:
-                    lr = optimizer.param_groups[0]['lr'] * args.lr_decay
-                    print('decay learning rate to %f' % lr, file=sys.stderr)
-                    optimizer.param_groups[0]['lr'] = lr
-
-                if is_better:
-                    patience = 0
-                    best_model_iter = train_iter
+                    is_better = len(hist_valid_scores) == 0 or valid_metric > max(hist_valid_scores)
+                    is_better_than_last = len(hist_valid_scores) == 0 or valid_metric > hist_valid_scores[-1]
+                    hist_valid_scores.append(valid_metric)
 
                     if valid_num > args.save_model_after:
-                        print('save currently the best model ..', file=sys.stderr)
-                        model_file_abs_path = os.path.abspath(model_file)
-                        symlin_file_abs_path = os.path.abspath(args.save_to + '.bin')
-                        os.system('ln -sf %s %s' % (model_file_abs_path, symlin_file_abs_path))
-                else:
-                    patience += 1
-                    print('hit patience %d' % patience, file=sys.stderr)
-                    if patience == args.patience:
-                        print('early stop!', file=sys.stderr)
-                        print('the best model is from iteration [%d]' % best_model_iter, file=sys.stderr)
-                        exit(0)
+                        model_file = args.save_to + '.iter%d.bin' % train_iter
+                        print('save model to [%s]' % model_file, file=sys.stderr)
+                        model.save(model_file)
+
+                    if (not is_better_than_last) and args.lr_decay:
+                        lr = optimizer.param_groups[0]['lr'] * args.lr_decay
+                        print('decay learning rate to %f' % lr, file=sys.stderr)
+                        optimizer.param_groups[0]['lr'] = lr
+
+                    if is_better:
+                        patience = 0
+                        best_model_iter = train_iter
+
+                        if valid_num > args.save_model_after:
+                            print('save currently the best model ..', file=sys.stderr)
+                            model_file_abs_path = os.path.abspath(model_file)
+                            symlin_file_abs_path = os.path.abspath(args.save_to + '.bin')
+                            os.system('ln -sf %s %s' % (model_file_abs_path, symlin_file_abs_path))
+                    else:
+                        patience += 1
+                        print('hit patience %d' % patience, file=sys.stderr)
+                        if patience == args.patience:
+                            print('early stop!', file=sys.stderr)
+                            print('the best model is from iteration [%d]' % best_model_iter, file=sys.stderr)
+                            exit(0)
 
 
 def read_raml_train_data(data_file, temp):
@@ -696,7 +704,7 @@ def read_raml_train_data(data_file, temp):
             tgt_scores = np.exp(tgt_scores)
             tgt_scores = tgt_scores / np.sum(tgt_scores)
 
-            tgt_entry = zip(tgt_samples, tgt_scores)
+            tgt_entry = list(zip(tgt_samples, tgt_scores))
             train_data[src_sent] = tgt_entry
 
             line = f.readline()
@@ -741,213 +749,217 @@ def train_raml(args):
     if args.smooth_bleu:
         sm_func = SmoothingFunction().method3
 
-    while True:
-        epoch += 1
-        for src_sents, tgt_sents in data_iter(train_data, batch_size=args.batch_size):
-            train_iter += 1
+    with open(args.train_log_file, "w") as train_output, open(args.validation_log_file, "w") as validation_output:
 
-            raml_src_sents = []
-            raml_tgt_sents = []
-            raml_tgt_weights = []
+        while True:
+            epoch += 1
+            for src_sents, tgt_sents in data_iter(train_data, batch_size=args.batch_size):
+                train_iter += 1
 
-            if args.raml_sample_mode == 'pre_sample':
-                for src_sent in src_sents:
-                    tgt_samples_all = raml_samples[' '.join(src_sent)]
+                raml_src_sents = []
+                raml_tgt_sents = []
+                raml_tgt_weights = []
 
-                    if args.sample_size >= len(tgt_samples_all):
-                        tgt_samples = tgt_samples_all
-                    else:
-                        tgt_samples_id = np.random.choice(range(1, len(tgt_samples_all)), size=args.sample_size - 1, replace=False)
-                        tgt_samples = [tgt_samples_all[0]] + [tgt_samples_all[i] for i in tgt_samples_id] # make sure the ground truth y* is in the samples
-
-                    raml_src_sents.extend([src_sent] * len(tgt_samples))
-                    raml_tgt_sents.extend([['<s>'] + sent.split(' ') + ['</s>'] for sent, weight in tgt_samples])
-                    raml_tgt_weights.extend([weight for sent, weight in tgt_samples])
-            elif args.raml_sample_mode in ['hamming_distance', 'hamming_distance_impt_sample']:
-                for src_sent, tgt_sent in zip(src_sents, tgt_sents):
-                    tgt_samples = []  # make sure the ground truth y* is in the samples
-                    tgt_sent_len = len(tgt_sent) - 3 # remove <s> and </s> and ending period .
-                    tgt_ref_tokens = tgt_sent[1:-1]
-                    bleu_scores = []
-                    # print('y*: %s' % ' '.join(tgt_sent))
-                    # sample an edit distances
-                    e_samples = np.random.choice(range(tgt_sent_len + 1), p=payoff_prob[tgt_sent_len], size=args.sample_size, replace=True)
-
-                    # make sure the ground truth y* is in the samples
-                    if args.raml_bias_groundtruth and (not 0 in e_samples):
-                        e_samples[0] = 0
-
-                    for i, e in enumerate(e_samples):
-                        if e > 0:
-                            # sample a new tgt_sent $y$
-                            old_word_pos = np.random.choice(range(1, tgt_sent_len + 1), size=e, replace=False)
-                            new_words = [vocab.tgt.id2word[wid] for wid in np.random.randint(3, len(vocab.tgt), size=e)]
-                            new_tgt_sent = list(tgt_sent)
-                            for pos, word in zip(old_word_pos, new_words):
-                                new_tgt_sent[pos] = word
+                if args.raml_sample_mode == 'pre_sample':
+                    for src_sent in src_sents:
+                        sent = ' '.join(src_sent)
+                        tgt_samples_all = raml_samples[sent]
+                        # print(f'src_sent: "{sent}", target_samples_all: {len(list(tgt_samples_all))}')
+                        if args.sample_size >= len(list(tgt_samples_all)):
+                            tgt_samples = tgt_samples_all
                         else:
-                            new_tgt_sent = list(tgt_sent)
+                            tgt_samples_id = np.random.choice(range(1, len(list(tgt_samples_all))), size=args.sample_size - 1, replace=False)
+                            tgt_samples = [tgt_samples_all[0]] + [tgt_samples_all[i] for i in tgt_samples_id] # make sure the ground truth y* is in the samples
 
-                        # if enable importance sampling, compute bleu score
-                        if args.raml_sample_mode == 'hamming_distance_impt_sample':
+                        raml_src_sents.extend([src_sent] * len(list(tgt_samples)))
+                        raml_tgt_sents.extend([['<s>'] + sent.split(' ') + ['</s>'] for sent, weight in tgt_samples])
+                        raml_tgt_weights.extend([weight for sent, weight in tgt_samples])
+                elif args.raml_sample_mode in ['hamming_distance', 'hamming_distance_impt_sample']:
+                    for src_sent, tgt_sent in zip(src_sents, tgt_sents):
+                        tgt_samples = []  # make sure the ground truth y* is in the samples
+                        tgt_sent_len = len(tgt_sent) - 3 # remove <s> and </s> and ending period .
+                        tgt_ref_tokens = tgt_sent[1:-1]
+                        bleu_scores = []
+                        # print('y*: %s' % ' '.join(tgt_sent))
+                        # sample an edit distances
+                        e_samples = np.random.choice(range(tgt_sent_len + 1), p=payoff_prob[tgt_sent_len], size=args.sample_size, replace=True)
+
+                        # make sure the ground truth y* is in the samples
+                        if args.raml_bias_groundtruth and (not 0 in e_samples):
+                            e_samples[0] = 0
+
+                        for i, e in enumerate(e_samples):
                             if e > 0:
-                                # remove <s> and </s>
-                                bleu_score = sentence_bleu([tgt_ref_tokens], new_tgt_sent[1:-1], smoothing_function=sm_func)
-                                bleu_scores.append(bleu_score)
+                                # sample a new tgt_sent $y$
+                                old_word_pos = np.random.choice(range(1, tgt_sent_len + 1), size=e, replace=False)
+                                new_words = [vocab.tgt.id2word[wid] for wid in np.random.randint(3, len(vocab.tgt), size=e)]
+                                new_tgt_sent = list(tgt_sent)
+                                for pos, word in zip(old_word_pos, new_words):
+                                    new_tgt_sent[pos] = word
                             else:
-                                bleu_scores.append(1.)
+                                new_tgt_sent = list(tgt_sent)
 
-                        # print('y: %s' % ' '.join(new_tgt_sent))
-                        tgt_samples.append(new_tgt_sent)
+                            # if enable importance sampling, compute bleu score
+                            if args.raml_sample_mode == 'hamming_distance_impt_sample':
+                                if e > 0:
+                                    # remove <s> and </s>
+                                    bleu_score = sentence_bleu([tgt_ref_tokens], new_tgt_sent[1:-1], smoothing_function=sm_func)
+                                    bleu_scores.append(bleu_score)
+                                else:
+                                    bleu_scores.append(1.)
 
-                    # if enable importance sampling, compute importance weight
-                    if args.raml_sample_mode == 'hamming_distance_impt_sample':
-                        tgt_sample_weights = [math.exp(bleu_score / tau) / math.exp(-e / tau) for e, bleu_score in zip(e_samples, bleu_scores)]
-                        normalizer = sum(tgt_sample_weights)
-                        tgt_sample_weights = [w / normalizer for w in tgt_sample_weights]
-                    else:
-                        tgt_sample_weights = [1.] * args.sample_size
+                            # print('y: %s' % ' '.join(new_tgt_sent))
+                            tgt_samples.append(new_tgt_sent)
 
-                    if args.debug:
-                        print('*' * 30)
-                        print('Target: %s' % ' '.join(tgt_sent))
-                        for tgt_sample, e, bleu_score, weight in zip(tgt_samples, e_samples, bleu_scores,
-                                                                     tgt_sample_weights):
-                            print('Sample: %s ||| e: %d ||| bleu: %f ||| weight: %f' % (
-                            ' '.join(tgt_sample), e, bleu_score, weight))
-                        print()
+                        # if enable importance sampling, compute importance weight
+                        if args.raml_sample_mode == 'hamming_distance_impt_sample':
+                            tgt_sample_weights = [math.exp(bleu_score / tau) / math.exp(-e / tau) for e, bleu_score in zip(e_samples, bleu_scores)]
+                            normalizer = sum(tgt_sample_weights)
+                            tgt_sample_weights = [w / normalizer for w in tgt_sample_weights]
+                        else:
+                            tgt_sample_weights = [1.] * args.sample_size
 
-                    raml_src_sents.extend([src_sent] * len(tgt_samples))
-                    raml_tgt_sents.extend(tgt_samples)
-                    raml_tgt_weights.extend(tgt_sample_weights)
+                        if args.debug:
+                            print('*' * 30)
+                            print('Target: %s' % ' '.join(tgt_sent))
+                            for tgt_sample, e, bleu_score, weight in zip(tgt_samples, e_samples, bleu_scores,
+                                                                         tgt_sample_weights):
+                                print('Sample: %s ||| e: %d ||| bleu: %f ||| weight: %f' % (
+                                ' '.join(tgt_sample), e, bleu_score, weight))
+                            print()
 
-            src_sents_var = to_input_variable(raml_src_sents, vocab.src, cuda=args.cuda)
-            tgt_sents_var = to_input_variable(raml_tgt_sents, vocab.tgt, cuda=args.cuda)
-            weights_var = Variable(torch.FloatTensor(raml_tgt_weights), requires_grad=False)
-            if args.cuda:
-                weights_var = weights_var.cuda()
+                        raml_src_sents.extend([src_sent] * len(tgt_samples))
+                        raml_tgt_sents.extend(tgt_samples)
+                        raml_tgt_weights.extend(tgt_sample_weights)
 
-            batch_size = len(raml_src_sents)  # batch_size = args.batch_size * args.sample_size
-            src_sents_len = [len(s) for s in raml_src_sents]
-            pred_tgt_word_num = sum(len(s[1:]) for s in raml_tgt_sents)  # omitting leading `<s>`
-            optimizer.zero_grad()
+                src_sents_var = to_input_variable(raml_src_sents, vocab.src, cuda=args.cuda)
+                tgt_sents_var = to_input_variable(raml_tgt_sents, vocab.tgt, cuda=args.cuda)
+                weights_var = Variable(torch.FloatTensor(raml_tgt_weights), requires_grad=False)
+                if args.cuda:
+                    weights_var = weights_var.cuda()
 
-            # (tgt_sent_len, batch_size, tgt_vocab_size)
-            scores = model(src_sents_var, src_sents_len, tgt_sents_var[:-1])
-            # (tgt_sent_len * batch_size, tgt_vocab_size)
-            log_scores = F.log_softmax(scores.view(-1, scores.size(2)))
-            # remove leading <s> in tgt sent, which is not used as the target
-            flattened_tgt_sents = tgt_sents_var[1:].view(-1)
+                batch_size = len(raml_src_sents)  # batch_size = args.batch_size * args.sample_size
+                src_sents_len = [len(s) for s in raml_src_sents]
+                pred_tgt_word_num = sum(len(s[1:]) for s in raml_tgt_sents)  # omitting leading `<s>`
+                optimizer.zero_grad()
 
-            # batch_size * tgt_sent_len
-            tgt_log_scores = torch.gather(log_scores, 1, flattened_tgt_sents.unsqueeze(1)).squeeze(1)
-            unweighted_loss = -tgt_log_scores * (1. - torch.eq(flattened_tgt_sents, 0).float())
-            weighted_loss = unweighted_loss * weights_var.repeat(scores.size(0))
-            weighted_loss = weighted_loss.sum()
-            weighted_loss_val = weighted_loss.data[0]
-            nll_loss_val = unweighted_loss.sum().data[0]
-            # weighted_log_scores = log_scores * weights.view(-1, scores.size(2))
-            # weighted_loss = nll_loss(weighted_log_scores, flattened_tgt_sents)
+                # (tgt_sent_len, batch_size, tgt_vocab_size)
+                scores = model(src_sents_var, src_sents_len, tgt_sents_var[:-1])
+                # (tgt_sent_len * batch_size, tgt_vocab_size)
+                log_scores = F.log_softmax(scores.view(-1, scores.size(2)))
+                # remove leading <s> in tgt sent, which is not used as the target
+                flattened_tgt_sents = tgt_sents_var[1:].view(-1)
 
-            loss = weighted_loss / batch_size
-            # nll_loss_val = nll_loss(log_scores, flattened_tgt_sents).data[0]
+                # batch_size * tgt_sent_len
+                tgt_log_scores = torch.gather(log_scores, 1, flattened_tgt_sents.unsqueeze(1)).squeeze(1)
+                unweighted_loss = -tgt_log_scores * (1. - torch.eq(flattened_tgt_sents, 0).float())
+                weighted_loss = unweighted_loss * weights_var.repeat(scores.size(0))
+                weighted_loss = weighted_loss.sum()
+                weighted_loss_val = weighted_loss.data[0]
+                nll_loss_val = unweighted_loss.sum().data[0]
+                # weighted_log_scores = log_scores * weights.view(-1, scores.size(2))
+                # weighted_loss = nll_loss(weighted_log_scores, flattened_tgt_sents)
 
-            loss.backward()
-            # clip gradient
-            grad_norm = torch.nn.utils.clip_grad_norm(model.parameters(), args.clip_grad)
-            optimizer.step()
+                loss = weighted_loss / batch_size
+                # nll_loss_val = nll_loss(log_scores, flattened_tgt_sents).data[0]
 
-            report_weighted_loss += weighted_loss_val
-            cum_weighted_loss += weighted_loss_val
-            report_loss += nll_loss_val
-            cum_loss += nll_loss_val
-            report_tgt_words += pred_tgt_word_num
-            cum_tgt_words += pred_tgt_word_num
-            report_examples += batch_size
-            cum_examples += batch_size
-            cum_batches += batch_size
+                loss.backward()
+                # clip gradient
+                grad_norm = torch.nn.utils.clip_grad_norm(model.parameters(), args.clip_grad)
+                optimizer.step()
 
-            if train_iter % args.log_every == 0:
-                print('epoch %d, iter %d, avg. loss %.2f, '
-                      'avg. ppl %.2f cum. examples %d, '
-                      'speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
-                                                                       report_weighted_loss / report_examples,
-                                                                       np.exp(report_loss / report_tgt_words),
-                                                                       cum_examples,
-                                                                       report_tgt_words / (time.time() - train_time),
-                                                                       time.time() - begin_time),
-                      file=sys.stderr)
+                report_weighted_loss += weighted_loss_val
+                cum_weighted_loss += weighted_loss_val
+                report_loss += nll_loss_val
+                cum_loss += nll_loss_val
+                report_tgt_words += pred_tgt_word_num
+                cum_tgt_words += pred_tgt_word_num
+                report_examples += batch_size
+                cum_examples += batch_size
+                cum_batches += batch_size
 
-                train_time = time.time()
-                report_loss = report_weighted_loss = report_tgt_words = report_examples = 0.
+                if train_iter % args.log_every == 0:
+                    _log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (epoch, train_iter,
+                                                                           report_weighted_loss / report_examples,
+                                                                           np.exp(report_loss / report_tgt_words),
+                                                                           cum_examples,
+                                                                           report_tgt_words / (time.time() - train_time),
+                                                                           time.time() - begin_time)
+                    print(_log, file=sys.stderr)
+                    print(_log, file=train_output)
 
-            # perform validation
-            if train_iter % args.valid_niter == 0:
-                print('epoch %d, iter %d, cum. loss %.2f, '
-                      'cum. ppl %.2f cum. examples %d' % (epoch, train_iter,
-                                                          cum_weighted_loss / cum_batches,
-                                                          np.exp(cum_loss / cum_tgt_words),
-                                                          cum_examples),
-                      file=sys.stderr)
+                    train_time = time.time()
+                    report_loss = report_weighted_loss = report_tgt_words = report_examples = 0.
 
-                cum_loss = cum_weighted_loss = cum_batches = cum_tgt_words = 0.
-                valid_num += 1
-
-                print('begin validation ...', file=sys.stderr)
-                model.eval()
-
-                # compute dev. ppl and bleu
-
-                dev_loss = evaluate_loss(model, dev_data, cross_entropy_loss)
-                dev_ppl = np.exp(dev_loss)
-
-                if args.valid_metric in ['bleu', 'word_acc', 'sent_acc']:
-                    dev_hyps = decode(model, dev_data)
-                    dev_hyps = [hyps[0] for hyps in dev_hyps]
-                    if args.valid_metric == 'bleu':
-                        valid_metric = get_bleu([tgt for src, tgt in dev_data], dev_hyps)
-                    else:
-                        valid_metric = get_acc([tgt for src, tgt in dev_data], dev_hyps, acc_type=args.valid_metric)
-                    print('validation: iter %d, dev. ppl %f, dev. %s %f' % (
-                    train_iter, dev_ppl, args.valid_metric, valid_metric),
-                          file=sys.stderr)
-                else:
-                    valid_metric = -dev_ppl
-                    print('validation: iter %d, dev. ppl %f' % (train_iter, dev_ppl),
+                # perform validation
+                if train_iter % args.valid_niter == 0:
+                    print('epoch %d, iter %d, cum. loss %.2f, '
+                          'cum. ppl %.2f cum. examples %d' % (epoch, train_iter,
+                                                              cum_weighted_loss / cum_batches,
+                                                              np.exp(cum_loss / cum_tgt_words),
+                                                              cum_examples),
                           file=sys.stderr)
 
-                model.train()
+                    cum_loss = cum_weighted_loss = cum_batches = cum_tgt_words = 0.
+                    valid_num += 1
 
-                is_better = len(hist_valid_scores) == 0 or valid_metric > max(hist_valid_scores)
-                is_better_than_last = len(hist_valid_scores) == 0 or valid_metric > hist_valid_scores[-1]
-                hist_valid_scores.append(valid_metric)
+                    print('begin validation ...', file=sys.stderr)
+                    model.eval()
 
-                if valid_num > args.save_model_after:
-                    model_file = args.save_to + '.iter%d.bin' % train_iter
-                    print('save model to [%s]' % model_file, file=sys.stderr)
-                    model.save(model_file)
+                    # compute dev. ppl and bleu
 
-                if (not is_better_than_last) and args.lr_decay:
-                    lr = optimizer.param_groups[0]['lr'] * args.lr_decay
-                    print('decay learning rate to %f' % lr, file=sys.stderr)
-                    optimizer.param_groups[0]['lr'] = lr
+                    dev_loss = evaluate_loss(model, dev_data, cross_entropy_loss)
+                    dev_ppl = np.exp(dev_loss)
 
-                if is_better:
-                    patience = 0
-                    best_model_iter = train_iter
+                    if args.valid_metric in ['bleu', 'word_acc', 'sent_acc']:
+                        dev_hyps = decode(model, dev_data)
+                        dev_hyps = [hyps[0] for hyps in dev_hyps]
+                        if args.valid_metric == 'bleu':
+                            valid_metric = get_bleu([tgt for src, tgt in dev_data], dev_hyps)
+                        else:
+                            valid_metric = get_acc([tgt for src, tgt in dev_data], dev_hyps, acc_type=args.valid_metric)
+                        _log = 'validation: iter %d, dev. ppl %f, dev. %s %f' % (
+                                train_iter, dev_ppl, args.valid_metric, valid_metric)
+                        print(_log, file=sys.stderr)
+                        print(_log, file=validation_output)
+
+                    else:
+                        valid_metric = -dev_ppl
+                        print('validation: iter %d, dev. ppl %f' % (train_iter, dev_ppl),
+                              file=sys.stderr)
+
+                    model.train()
+
+                    is_better = len(hist_valid_scores) == 0 or valid_metric > max(hist_valid_scores)
+                    is_better_than_last = len(hist_valid_scores) == 0 or valid_metric > hist_valid_scores[-1]
+                    hist_valid_scores.append(valid_metric)
 
                     if valid_num > args.save_model_after:
-                        print('save currently the best model ..', file=sys.stderr)
-                        model_file_abs_path = os.path.abspath(model_file)
-                        symlin_file_abs_path = os.path.abspath(args.save_to + '.bin')
-                        os.system('ln -sf %s %s' % (model_file_abs_path, symlin_file_abs_path))
-                else:
-                    patience += 1
-                    print('hit patience %d' % patience, file=sys.stderr)
-                    if patience == args.patience:
-                        print('early stop!', file=sys.stderr)
-                        print('the best model is from iteration [%d]' % best_model_iter, file=sys.stderr)
-                        exit(0)
+                        model_file = args.save_to + '.iter%d.bin' % train_iter
+                        print('save model to [%s]' % model_file, file=sys.stderr)
+                        model.save(model_file)
+
+                    if (not is_better_than_last) and args.lr_decay:
+                        lr = optimizer.param_groups[0]['lr'] * args.lr_decay
+                        print('decay learning rate to %f' % lr, file=sys.stderr)
+                        optimizer.param_groups[0]['lr'] = lr
+
+                    if is_better:
+                        patience = 0
+                        best_model_iter = train_iter
+
+                        if valid_num > args.save_model_after:
+                            print('save currently the best model ..', file=sys.stderr)
+                            model_file_abs_path = os.path.abspath(model_file)
+                            symlin_file_abs_path = os.path.abspath(args.save_to + '.bin')
+                            os.system('ln -sf %s %s' % (model_file_abs_path, symlin_file_abs_path))
+                    else:
+                        patience += 1
+                        print('hit patience %d' % patience, file=sys.stderr)
+                        if patience == args.patience:
+                            print('early stop!', file=sys.stderr)
+                            print('the best model is from iteration [%d]' % best_model_iter, file=sys.stderr)
+                            exit(0)
 
 
 def get_bleu(references, hypotheses):

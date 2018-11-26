@@ -546,8 +546,8 @@ def train(args):
     dev_data_src = read_corpus(args.dev_src, source='src')
     dev_data_tgt = read_corpus(args.dev_tgt, source='tgt')
 
-    train_data = zip(train_data_src, train_data_tgt)
-    dev_data = zip(dev_data_src, dev_data_tgt)
+    train_data = list(zip(train_data_src, train_data_tgt))
+    dev_data = list(zip(dev_data_src, dev_data_tgt))
 
     vocab, model, optimizer, nll_loss, cross_entropy_loss = init_training(args)
 
@@ -717,11 +717,11 @@ def train_raml(args):
 
     train_data_src = read_corpus(args.train_src, source='src')
     train_data_tgt = read_corpus(args.train_tgt, source='tgt')
-    train_data = zip(train_data_src, train_data_tgt)
+    train_data = list(zip(train_data_src, train_data_tgt))
 
     dev_data_src = read_corpus(args.dev_src, source='src')
     dev_data_tgt = read_corpus(args.dev_tgt, source='tgt')
-    dev_data = zip(dev_data_src, dev_data_tgt)
+    dev_data = list(zip(dev_data_src, dev_data_tgt))
 
     vocab, model, optimizer, nll_loss, cross_entropy_loss = init_training(args)
 

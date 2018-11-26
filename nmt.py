@@ -322,7 +322,7 @@ class NMT(nn.Module):
 
         if to_word:
             for i, hyp in enumerate(completed_hypotheses):
-                completed_hypotheses[i] = [self.vocab.tgt.id2word[w] for w in hyp]
+                completed_hypotheses[i] = [self.vocab.tgt.id2word[int(w)] for w in hyp]
 
         ranked_hypotheses = sorted(zip(completed_hypotheses, completed_hypothesis_scores), key=lambda x: x[1], reverse=True)
 

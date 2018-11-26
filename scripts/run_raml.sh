@@ -22,8 +22,8 @@ temp="0.6"
 echo save model to models/${model_name}
 echo log to ${log_file}
 
-python3 \
-    nmt.py\
+python3 -u\
+     -m ipdb nmt.py \
     --mode raml_train \
     --vocab data/iwslt.vocab.bin \
     --save_to models/${model_name} \
@@ -43,10 +43,9 @@ python3 \
     --dev_src ${dev_src} \
     --dev_tgt ${dev_tgt} \
     --raml_sample_file ./tmp/samples.txt \
-    --log_every 1 \
+    --log_every 50 \
     --train_log_file ${train_log_file} \
     --validation_log_file ${validation_log_file} \
-    --valid_niter 10
     #    -m ipdb nmt.py \
     # --dropout 0.2 \
     # --raml_sample_file data/samples.corrupt_ngram.bleu_score.txt \

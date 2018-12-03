@@ -23,7 +23,7 @@ echo save model to models/${model_name}
 echo log to ${log_file}
 
 python3 -u\
-     -m ipdb nmt.py \
+    nmt.py \
     --mode raml_train \
     --vocab data/iwslt.vocab.bin \
     --save_to models/${model_name} \
@@ -50,14 +50,14 @@ python3 -u\
     # --dropout 0.2 \
     # --raml_sample_file data/samples.corrupt_ngram.bleu_score.txt \
 
-#python3 nmt.py \
-#    --mode test \
-#    --load_model models/${model_name}.bin \
-#    --beam_size 5 \
-#    --decode_max_time_step 100 \
-#    --save_to_file decode/${decode_file} \
-#    --test_src ${test_src} \
-#    --test_tgt ${test_tgt}
-#
-#echo "test result" >> logs/${train_log}
-#perl multi-bleu.perl ${test_tgt} < decode/${decode_file} >> logs/${train_log}
+python3 nmt.py \
+    --mode test \
+    --load_model models/${model_name}.bin \
+    --beam_size 5 \
+    --decode_max_time_step 100 \
+    --save_to_file decode/${decode_file} \
+    --test_src ${test_src} \
+    --test_tgt ${test_tgt}
+
+echo "test result" >> logs/${train_log}
+perl multi-bleu.perl ${test_tgt} < decode/${decode_file} >> logs/${train_log}

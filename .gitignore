@@ -1,2 +1,7 @@
 *__pycache__*
 .idea
+logs/*
+decode/*
+models/*
+tmp/*
+.ipynb_checkpoints/*

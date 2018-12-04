@@ -537,7 +537,7 @@ def train_raml(args):
                     dev_ppl = np.exp(dev_loss)
 
                     if args.valid_metric in ['bleu', 'word_acc', 'sent_acc']:
-                        dev_hyps = decode(model, dev_data)
+                        dev_hyps = decode(model, dev_data, f=validation_output, verbose=False)
                         dev_hyps = [hyps[0] for hyps in dev_hyps]
                         if args.valid_metric == 'bleu':
                             valid_metric = get_bleu([tgt for src, tgt in dev_data], dev_hyps)
@@ -619,32 +619,42 @@ def get_acc(references, hypotheses, acc_type='word'):
     return acc
 
 
-def decode(model, data, verbose=True):
+def decode(model, data, verbose=True, f=None):
     """
     decode the dataset and compute sentence level acc. and BLEU.
     """
     hypotheses = []
     begin_time = time.time()
 
+    print('decode %d examples' % (len(data)))
+
     if type(data[0]) is tuple:
         for src_sent, tgt_sent in data:
             hyps = model.translate(src_sent)
             hypotheses.append(hyps)
 
-            if verbose:
-                print('*' * 50)
-                print('Source: ', ' '.join(src_sent))
-                print('Target: ', ' '.join(tgt_sent))
-                print('Top Hypothesis: ', ' '.join(hyps[0]))
+            if verbose or f:
+                report = f"""
+                {'*' * 50}
+                Source: {' '.join(src_sent)}
+                Target: {' '.join(tgt_sent)}
+                Top Hypothesis: {' '.join(hyps[0])}
+                """
+                if verbose: print(report);
+                if f: print(report, file=f);
     else:
         for src_sent in data:
             hyps = model.translate(src_sent)
             hypotheses.append(hyps)
 
-            if verbose:
-                print('*' * 50)
-                print('Source: ', ' '.join(src_sent))
-                print('Top Hypothesis: ', ' '.join(hyps[0]))
+            if verbose or f:
+                report = f"""
+                {'*' * 50}
+                Source: {' '.join(src_sent)}
+                Top Hypothesis: {' '.join(hyps[0])}
+                """
+                if verbose: print(report);
+                if f: print(report, file=f);
 
     elapsed = time.time() - begin_time
 

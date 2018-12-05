@@ -19,11 +19,12 @@ train_log_file="./logs/"${now}"_train.log"
 validation_log_file="./logs/"${now}"_validation.log"
 temp="0.6"
 
+
 echo save model to models/${model_name}
 echo log to ${log_file}
 
 python3 -u\
-    nmt.py \
+    -m ipdb nmt.py \
     --mode raml_train \
     --vocab data/iwslt.vocab.bin \
     --save_to models/${model_name} \
@@ -35,7 +36,7 @@ python3 -u\
     --hidden_size 256 \
     --embed_size 256 \
     --uniform_init 0.1 \
-    --clip_grad 5.0 \
+    --clip_grad 0.25 \
     --lr_decay 0.5 \
     --temp ${temp} \
     --train_src ${train_src} \
@@ -46,9 +47,10 @@ python3 -u\
     --log_every 50 \
     --train_log_file ${train_log_file} \
     --validation_log_file ${validation_log_file} \
+    --valid_niter 10000 \
+    --cuda
     #    -m ipdb nmt.py \
     # --dropout 0.2 \
-    # --raml_sample_file data/samples.corrupt_ngram.bleu_score.txt \
 
 python3 nmt.py \
     --mode test \
@@ -57,7 +59,8 @@ python3 nmt.py \
     --decode_max_time_step 100 \
     --save_to_file decode/${decode_file} \
     --test_src ${test_src} \
-    --test_tgt ${test_tgt}
+    --test_tgt ${test_tgt} \
+    --cuda
 
 echo "test result" >> logs/${train_log}
 perl multi-bleu.perl ${test_tgt} < decode/${decode_file} >> logs/${train_log}

@@ -687,7 +687,7 @@ def compute_lm_prob(args):
     model.eval()
 
     if args.cuda:
-        model = model.cuda()
+        model = nn.DataParallel(model).cuda()
 
     f = open(args.save_to_file, 'w')
     for src_sent, tgt_sent in test_data:

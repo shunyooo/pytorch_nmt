@@ -26,6 +26,8 @@ from vocab import Vocab, VocabEntry
 from process_samples import generate_hamming_distance_payoff_distribution
 import math
 
+import slack
+
 
 def init_config():
     parser = argparse.ArgumentParser()
@@ -83,6 +85,9 @@ def init_config():
 
     parser.add_argument('--smooth_bleu', action='store_true', default=False,
                         help='smooth sentence level BLEU score.')
+
+    parser.add_argument('--notify_slack', action='store_true', default=True,
+                        help='notify slack')
 
     # TODO: greedy sampling is still buggy!
     parser.add_argument('--sample_method', default='random', choices=['random', 'greedy'])
@@ -214,7 +219,7 @@ def train(args):
                                                                                                   report_loss / report_tgt_words),
                                                                                               cum_examples,
                                                                                               report_tgt_words / (
-                                                                                                          time.time() - train_time),
+                                                                                                      time.time() - train_time),
                                                                                               time.time() - begin_time)
                     print(_log)
                     print(_log, file=train_output)
@@ -250,7 +255,7 @@ def train(args):
                         else:
                             valid_metric = get_acc([tgt for src, tgt in dev_data], dev_hyps, acc_type=args.valid_metric)
                         _log = 'validation: iter %d, dev. ppl %f, dev. %s %f' % (
-                        train_iter, dev_ppl, args.valid_metric, valid_metric)
+                            train_iter, dev_ppl, args.valid_metric, valid_metric)
                         print(_log, file=sys.stderr)
                         print(_log, file=validation_output)
 
@@ -328,7 +333,6 @@ def read_raml_train_data(data_file, temp):
 
     return train_data
 
-
 def train_raml(args):
     tau = args.temp
 
@@ -360,6 +364,13 @@ def train_raml(args):
     hist_valid_scores = []
     train_time = begin_time = time.time()
     print('begin RAML training')
+
+    if args.notify_slack:
+        slack.post(f"""
+        {args}
+        begin RAML training
+        """)
+
 
     # smoothing function for BLEU
     sm_func = None
@@ -395,7 +406,7 @@ def train_raml(args):
                         raml_tgt_weights.extend([weight for sent, weight in tgt_samples])
                 elif args.raml_sample_mode in ['hamming_distance', 'hamming_distance_impt_sample']:
                     for src_sent, tgt_sent in zip(src_sents, tgt_sents):
-                        tgt_samples = []  # make sure the ground truth y* is in the samples
+                        tgt_samples =  []  # make sure the ground truth y* is in the samples
                         tgt_sent_len = len(tgt_sent) - 3  # remove <s> and </s> and ending period .
                         tgt_ref_tokens = tgt_sent[1:-1]
                         bleu_scores = []
@@ -504,17 +515,18 @@ def train_raml(args):
 
                 if train_iter % args.log_every == 0:
                     _log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (
-                    epoch, train_iter,
-                    report_weighted_loss / report_examples,
-                    np.exp(report_loss / report_tgt_words),
-                    cum_examples,
-                    report_tgt_words / (time.time() - train_time),
-                    time.time() - begin_time)
+                        epoch, train_iter,
+                        report_weighted_loss / report_examples,
+                        np.exp(report_loss / report_tgt_words),
+                        cum_examples,
+                        report_tgt_words / (time.time() - train_time),
+                        time.time() - begin_time)
                     print(_log)
                     print(_log, file=train_output)
-
                     train_time = time.time()
                     report_loss = report_weighted_loss = report_tgt_words = report_examples = 0.
+                    if args.notify_slack:
+                        slack.post(_log)
 
                 # perform validation
                 if train_iter % args.valid_niter == 0:
@@ -547,6 +559,8 @@ def train_raml(args):
                             train_iter, dev_ppl, args.valid_metric, valid_metric)
                         print(_log)
                         print(_log, file=validation_output)
+                        if args.notify_slack:
+                            slack.post(_log)
 
                     else:
                         valid_metric = -dev_ppl
@@ -582,8 +596,14 @@ def train_raml(args):
                         patience += 1
                         print('hit patience %d' % patience)
                         if patience == args.patience:
-                            print('early stop!')
-                            print('the best model is from iteration [%d]' % best_model_iter)
+                            _log = f"""
+                            {'hit patience %d' % patience}
+                            early stop!
+                            {'the best model is from iteration [%d]' % best_model_iter}
+                            """
+                            print(_log)
+                            if args.notify_slack:
+                                slack.post(_log)
                             exit(0)
 
                 if args.debug:

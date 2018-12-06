@@ -768,7 +768,8 @@ def test(args):
     model.eval()
 
     if args.cuda:
-        model = nn.DataParallel(model).cuda()
+        # model = nn.DataParallel(model).cuda()
+        model = model.cuda()
 
     hypotheses = decode(model, test_data)
     top_hypotheses = [hyps[0] for hyps in hypotheses]

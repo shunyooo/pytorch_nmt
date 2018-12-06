@@ -154,7 +154,8 @@ def init_training(args):
     cross_entropy_loss = nn.CrossEntropyLoss(weight=vocab_mask, reduction='sum')
 
     if args.cuda:
-        model = nn.DataParallel(model).cuda()
+        # model = nn.DataParallel(model).cuda()
+        model = model.cuda()
         nll_loss = nll_loss.cuda()
         cross_entropy_loss = cross_entropy_loss.cuda()
 
@@ -372,6 +373,7 @@ def _list_dict_update(data_dict, add_dict, mode, is_save=False):
     if 'args' in data_dict:
         if is_save:
             file_path = data_dict['args'].log_data_file
+            print(f'log_data save to {file_path}')
             with open(file_path, 'wb') as log_out:
                 pickle.dump(data_dict, log_out)
     else:
@@ -776,7 +778,8 @@ def compute_lm_prob(args):
     model.eval()
 
     if args.cuda:
-        model = nn.DataParallel(model).cuda()
+        # model = nn.DataParallel(model).cuda()
+        model = model.cuda()
 
     f = open(args.save_to_file, 'w')
     for src_sent, tgt_sent in test_data:
@@ -880,7 +883,8 @@ def interactive(args):
     model.eval()
 
     if args.cuda:
-        model = nn.DataParallel(model).cuda()
+        # model = nn.DataParallel(model).cuda()
+        model = model.cuda()
 
     while True:
         src_sent = input('Source Sentence:')
@@ -911,7 +915,8 @@ def sample(args):
     model.eval()
 
     if args.cuda:
-        model = nn.DataParallel(model).cuda()
+        # model = nn.DataParallel(model).cuda()
+        model = model.cuda()
 
     print('begin sampling')
 

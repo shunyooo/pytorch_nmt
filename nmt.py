@@ -182,12 +182,20 @@ def train(args):
     cum_examples = cum_batches = report_examples = epoch = valid_num = best_model_iter = 0
     hist_valid_scores = []
     train_time = begin_time = time.time()
-    print('begin Maximum Likelihood training')
+
+    _info = f"""
+        begin Maximum Likelihood training
+        ・学習データ：{len(train_data)}ペア
+        ・テストデータ：{len(dev_data)}ペア
+        ・バッチサイズ：{args.batch_size}
+        ・1epoch = {len(train_data)}ペア = {int(len(train_data)/args.batch_size)}iter
+        """
+    print(_info)
 
     if args.notify_slack:
         slack.post(f"""
+        {_info}
         {args}
-        begin Maximum Likelihood training
         """)
 
     with open(args.train_log_file, "w") as train_output, open(args.validation_log_file, "w") as validation_output:
@@ -414,14 +422,21 @@ def train_raml(args):
     cum_examples = cum_batches = report_examples = epoch = valid_num = best_model_iter = 0
     hist_valid_scores = []
     train_time = begin_time = time.time()
-    print('begin RAML training')
+    _info = f"""
+        begin RAML training
+        ・学習データ：{len(train_data)}ペア
+        ・テストデータ：{len(dev_data)}ペア
+        ・バッチサイズ：{args.batch_size}
+        ・1epoch = {len(train_data)}ペア = {int(len(train_data)/args.batch_size)}iter
+        """
+    print(_info)
 
     log_data = {'args': args}
 
     if args.notify_slack:
         slack.post(f"""
+        {_info}
         {args}
-        begin RAML training
         """)
 
     # smoothing function for BLEU

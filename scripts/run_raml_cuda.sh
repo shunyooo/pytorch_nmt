@@ -37,7 +37,7 @@ python3 -u\
     --hidden_size 256 \
     --embed_size 256 \
     --uniform_init 0.1 \
-    --clip_grad 0.25 \
+    --clip_grad 3.0 \
     --lr_decay 0.5 \
     --temp ${temp} \
     --train_src ${train_src} \

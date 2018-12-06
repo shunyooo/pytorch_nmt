@@ -147,7 +147,7 @@ def init_training(args):
     cross_entropy_loss = nn.CrossEntropyLoss(weight=vocab_mask, reduction='sum')
 
     if args.cuda:
-        model = model.cuda()
+        model = nn.DataParallel(model).cuda()
         nll_loss = nll_loss.cuda()
         cross_entropy_loss = cross_entropy_loss.cuda()
 
@@ -258,6 +258,8 @@ def train(args):
                             train_iter, dev_ppl, args.valid_metric, valid_metric)
                         print(_log, file=sys.stderr)
                         print(_log, file=validation_output)
+                        if args.notify_slack:
+                            slack.post(_log)
 
                     else:
                         valid_metric = -dev_ppl
@@ -766,7 +768,7 @@ def test(args):
     model.eval()
 
     if args.cuda:
-        model = model.cuda()
+        model = nn.DataParallel(model).cuda()
 
     hypotheses = decode(model, test_data)
     top_hypotheses = [hyps[0] for hyps in hypotheses]
@@ -810,7 +812,7 @@ def interactive(args):
     model.eval()
 
     if args.cuda:
-        model = model.cuda()
+        model = nn.DataParallel(model).cuda()
 
     while True:
         src_sent = input('Source Sentence:')
@@ -841,7 +843,7 @@ def sample(args):
     model.eval()
 
     if args.cuda:
-        model = model.cuda()
+        model = nn.DataParallel(model).cuda()
 
     print('begin sampling')
 

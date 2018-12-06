@@ -174,6 +174,8 @@ def train(args):
     train_data = list(zip(train_data_src, train_data_tgt))
     dev_data = list(zip(dev_data_src, dev_data_tgt))
 
+    dev_data = dev_data[:args.dev_limit]
+
     vocab, model, optimizer, nll_loss, cross_entropy_loss = init_training(args)
 
     train_iter = patience = cum_loss = report_loss = cum_tgt_words = report_tgt_words = 0
@@ -390,6 +392,8 @@ def train_raml(args):
     dev_data_src = read_corpus(args.dev_src, source='src')
     dev_data_tgt = read_corpus(args.dev_tgt, source='tgt')
     dev_data = list(zip(dev_data_src, dev_data_tgt))
+
+    dev_data = dev_data[:args.dev_limit]
 
     vocab, model, optimizer, nll_loss, cross_entropy_loss = init_training(args)
 

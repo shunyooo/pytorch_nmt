@@ -27,6 +27,7 @@ from process_samples import generate_hamming_distance_payoff_distribution
 import math
 
 import slack
+import pickle
 
 
 def init_config():
@@ -47,6 +48,8 @@ def init_config():
     parser.add_argument('--train_tgt', type=str, help='path to the training target file')
     parser.add_argument('--dev_src', type=str, help='path to the dev source file')
     parser.add_argument('--dev_tgt', type=str, help='path to the dev target file')
+    parser.add_argument('--dev_limit', default=6000, type=int, help='limit of dev data')
+
     parser.add_argument('--test_src', type=str, help='path to the test source file')
     parser.add_argument('--test_tgt', type=str, help='path to the test target file')
 
@@ -88,6 +91,10 @@ def init_config():
 
     parser.add_argument('--notify_slack', action='store_true', default=True,
                         help='notify slack')
+    parser.add_argument('--notify_slack_every', default=1000, type=int,
+                        help='every n iterations to notify slack training statistics')
+
+    parser.add_argument('--log_data_file', default='log_data', type=str, help='ログデータ保存ファイル先')
 
     # TODO: greedy sampling is still buggy!
     parser.add_argument('--sample_method', default='random', choices=['random', 'greedy'])
@@ -335,6 +342,36 @@ def read_raml_train_data(data_file, temp):
 
     return train_data
 
+
+def _list_dict_update(data_dict, add_dict, mode, is_save=False):
+    """
+    data_dictにadd_dictを結合する。
+    data_dictのvalueはlist, add_dictのvalueはスカラ, strの前提
+    mode = train, valid, test
+    """
+
+    _small_data_dict = None
+    if mode in data_dict:
+        _small_data_dict = data_dict[mode]
+    else:
+        data_dict[mode] = {}
+        _small_data_dict = data_dict[mode]
+
+    for k, v in add_dict.items():
+        if k in _small_data_dict:
+            _small_data_dict[k].append(v)
+        else:
+            _small_data_dict[k] = [v]
+
+    if 'args' in data_dict:
+        if is_save:
+            file_path = data_dict['args'].log_data_file
+            with open(file_path, 'wb') as log_out:
+                pickle.dump(data_dict, log_out)
+    else:
+        raise Exception('ERROR: argsをlog_dataに入れておいてください')
+
+
 def train_raml(args):
     tau = args.temp
 
@@ -367,12 +404,13 @@ def train_raml(args):
     train_time = begin_time = time.time()
     print('begin RAML training')
 
+    log_data = {'args': args}
+
     if args.notify_slack:
         slack.post(f"""
         {args}
         begin RAML training
         """)
-
 
     # smoothing function for BLEU
     sm_func = None
@@ -408,7 +446,7 @@ def train_raml(args):
                         raml_tgt_weights.extend([weight for sent, weight in tgt_samples])
                 elif args.raml_sample_mode in ['hamming_distance', 'hamming_distance_impt_sample']:
                     for src_sent, tgt_sent in zip(src_sents, tgt_sents):
-                        tgt_samples =  []  # make sure the ground truth y* is in the samples
+                        tgt_samples = []  # make sure the ground truth y* is in the samples
                         tgt_sent_len = len(tgt_sent) - 3  # remove <s> and </s> and ending period .
                         tgt_ref_tokens = tgt_sent[1:-1]
                         bleu_scores = []
@@ -525,6 +563,17 @@ def train_raml(args):
                         time.time() - begin_time)
                     print(_log)
                     print(_log, file=train_output)
+
+                    _list_dict_update(log_data, {
+                        'epoch': epoch,
+                        'train_iter': train_iter,
+                        'loss': report_weighted_loss / report_examples,
+                        'ppl': np.exp(report_loss / report_tgt_words),
+                        'examples': cum_examples,
+                        'speed': report_tgt_words / (time.time() - train_time),
+                        'elapsed': time.time() - begin_time
+                    }, 'train')
+
                     train_time = time.time()
                     report_loss = report_weighted_loss = report_tgt_words = report_examples = 0.
                     if args.notify_slack:
@@ -568,6 +617,18 @@ def train_raml(args):
                         valid_metric = -dev_ppl
                         print('validation: iter %d, dev. ppl %f' % (train_iter, dev_ppl),
                               file=sys.stderr)
+
+                    if 'dev_data' in log_data:
+                        log_data['dev_data'] = dev_data
+
+                    _list_dict_update(log_data, {
+                        'epoch': epoch,
+                        'train_iter': train_iter,
+                        'loss': dev_loss,
+                        'ppl': dev_ppl,
+                        args.valid_metric: valid_metric,
+                        'hyps': dev_hyps,
+                    }, 'validation', is_save=True)
 
                     model.train()
 

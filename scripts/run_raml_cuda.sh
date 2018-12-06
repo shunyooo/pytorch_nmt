@@ -14,9 +14,10 @@ model_name="model."${job_name}${now}
 job_file="scripts/train."${job_name}${now}".sh"
 decode_file=${job_name}${now}".test.en"
 
-log_file="./logs/"${now}"_stdout.log"
-train_log_file="./logs/"${now}"_train.log"
-validation_log_file="./logs/"${now}"_validation.log"
+log_file="./logs/raml_"${now}"_stdout.log"
+train_log_file="./logs/raml_"${now}"_train.log"
+validation_log_file="./logs/raml_"${now}"_validation.log"
+log_data_file="./logs/log/raml_"${now}".pickle"
 temp="0.6"
 
 
@@ -48,6 +49,7 @@ python3 -u\
     --train_log_file ${train_log_file} \
     --validation_log_file ${validation_log_file} \
     --valid_niter 10000 \
+    --log_data_file ${log_data_file}\
     --cuda
     #    -m ipdb nmt.py \
     # --dropout 0.2 \

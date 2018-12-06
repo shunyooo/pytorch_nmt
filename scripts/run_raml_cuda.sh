@@ -17,7 +17,7 @@ decode_file=${job_name}${now}".test.en"
 log_file="./logs/raml_"${now}"_stdout.log"
 train_log_file="./logs/raml_"${now}"_train.log"
 validation_log_file="./logs/raml_"${now}"_validation.log"
-log_data_file="./logs/log/raml_"${now}".pickle"
+log_data_file="./logs/raml_"${now}".pickle"
 temp="0.6"
 
 

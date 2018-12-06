@@ -49,7 +49,7 @@ python3 -u\
     --train_log_file ${train_log_file} \
     --validation_log_file ${validation_log_file} \
     --valid_niter 10000 \
-    --log_data_file ${log_data_file}\
+    --log_data_file ${log_data_file} \
     --cuda
     #    -m ipdb nmt.py \
     # --dropout 0.2 \

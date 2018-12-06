@@ -181,6 +181,12 @@ def train(args):
     train_time = begin_time = time.time()
     print('begin Maximum Likelihood training')
 
+    if args.notify_slack:
+        slack.post(f"""
+        {args}
+        begin Maximum Likelihood training
+        """)
+
     with open(args.train_log_file, "w") as train_output, open(args.validation_log_file, "w") as validation_output:
 
         while True:
@@ -576,7 +582,7 @@ def train_raml(args):
 
                     train_time = time.time()
                     report_loss = report_weighted_loss = report_tgt_words = report_examples = 0.
-                    if args.notify_slack:
+                    if train_iter % args.notify_slack_every == 0 and args.notify_slack:
                         slack.post(_log)
 
                 # perform validation

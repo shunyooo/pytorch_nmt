@@ -30,6 +30,7 @@ python3 nmt.py \
     --train_tgt ${train_tgt} \
     --dev_src ${dev_src} \
     --dev_tgt ${dev_tgt} \
+    --cuda
     # --dropout 0.2 \
 
 python3 nmt.py \
@@ -40,6 +41,8 @@ python3 nmt.py \
     --save_to_file decode/${decode_file} \
     --test_src ${test_src} \
     --test_tgt ${test_tgt} \
+    --cuda
+
 
 echo "test result" >> logs/${train_log}
 perl multi-bleu.perl ${test_tgt} < decode/${decode_file} >> logs/${train_log}

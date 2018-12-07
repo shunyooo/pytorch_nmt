@@ -45,7 +45,7 @@ python3 -u\
     --raml_sample_file ./tmp/samples.txt \
     --log_every 50 \
     --train_log_file ${train_log_file} \
-    --validation_log_file ${validation_log_file} \
+    --validation_log_file ${validation_log_file}
     #    -m ipdb nmt.py \
     # --dropout 0.2 \
     # --raml_sample_file data/samples.corrupt_ngram.bleu_score.txt \

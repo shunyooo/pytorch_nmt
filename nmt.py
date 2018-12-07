@@ -26,6 +26,9 @@ from vocab import Vocab, VocabEntry
 from process_samples import generate_hamming_distance_payoff_distribution
 import math
 
+import slack
+import pickle
+
 
 def init_config():
     parser = argparse.ArgumentParser()
@@ -45,6 +48,8 @@ def init_config():
     parser.add_argument('--train_tgt', type=str, help='path to the training target file')
     parser.add_argument('--dev_src', type=str, help='path to the dev source file')
     parser.add_argument('--dev_tgt', type=str, help='path to the dev target file')
+    parser.add_argument('--dev_limit', default=6000, type=int, help='limit of dev data')
+
     parser.add_argument('--test_src', type=str, help='path to the test source file')
     parser.add_argument('--test_tgt', type=str, help='path to the test target file')
 
@@ -83,6 +88,13 @@ def init_config():
 
     parser.add_argument('--smooth_bleu', action='store_true', default=False,
                         help='smooth sentence level BLEU score.')
+
+    parser.add_argument('--notify_slack', action='store_true', default=True,
+                        help='notify slack')
+    parser.add_argument('--notify_slack_every', default=1000, type=int,
+                        help='every n iterations to notify slack training statistics')
+
+    parser.add_argument('--log_data_file', default='log_data', type=str, help='ログデータ保存ファイル先')
 
     # TODO: greedy sampling is still buggy!
     parser.add_argument('--sample_method', default='random', choices=['random', 'greedy'])
@@ -142,6 +154,7 @@ def init_training(args):
     cross_entropy_loss = nn.CrossEntropyLoss(weight=vocab_mask, reduction='sum')
 
     if args.cuda:
+        # model = nn.DataParallel(model).cuda()
         model = model.cuda()
         nll_loss = nll_loss.cuda()
         cross_entropy_loss = cross_entropy_loss.cuda()
@@ -161,13 +174,29 @@ def train(args):
     train_data = list(zip(train_data_src, train_data_tgt))
     dev_data = list(zip(dev_data_src, dev_data_tgt))
 
+    dev_data = dev_data[:args.dev_limit]
+
     vocab, model, optimizer, nll_loss, cross_entropy_loss = init_training(args)
 
     train_iter = patience = cum_loss = report_loss = cum_tgt_words = report_tgt_words = 0
     cum_examples = cum_batches = report_examples = epoch = valid_num = best_model_iter = 0
     hist_valid_scores = []
     train_time = begin_time = time.time()
-    print('begin Maximum Likelihood training')
+
+    _info = f"""
+        begin Maximum Likelihood training
+        ・学習：{len(train_data)}ペア, {args.train_log_file}
+        ・テスト：{len(dev_data)}ペア, {args.valid_niter}iter毎 {args.validation_log_file}
+        ・バッチサイズ：{args.batch_size}
+        ・1epoch = {len(train_data)}ペア = {int(len(train_data)/args.batch_size)}iter
+        """
+    print(_info)
+
+    if args.notify_slack:
+        slack.post(f"""
+        {_info}
+        {args}
+        """)
 
     with open(args.train_log_file, "w") as train_output, open(args.validation_log_file, "w") as validation_output:
 
@@ -214,7 +243,7 @@ def train(args):
                                                                                                   report_loss / report_tgt_words),
                                                                                               cum_examples,
                                                                                               report_tgt_words / (
-                                                                                                          time.time() - train_time),
+                                                                                                      time.time() - train_time),
                                                                                               time.time() - begin_time)
                     print(_log)
                     print(_log, file=train_output)
@@ -250,9 +279,11 @@ def train(args):
                         else:
                             valid_metric = get_acc([tgt for src, tgt in dev_data], dev_hyps, acc_type=args.valid_metric)
                         _log = 'validation: iter %d, dev. ppl %f, dev. %s %f' % (
-                        train_iter, dev_ppl, args.valid_metric, valid_metric)
+                            train_iter, dev_ppl, args.valid_metric, valid_metric)
                         print(_log, file=sys.stderr)
                         print(_log, file=validation_output)
+                        if args.notify_slack:
+                            slack.post(_log)
 
                     else:
                         valid_metric = -dev_ppl
@@ -329,6 +360,36 @@ def read_raml_train_data(data_file, temp):
     return train_data
 
 
+def _list_dict_update(data_dict, add_dict, mode, is_save=False):
+    """
+    data_dictにadd_dictを結合する。
+    data_dictのvalueはlist, add_dictのvalueはスカラ, strの前提
+    mode = train, valid, test
+    """
+
+    _small_data_dict = None
+    if mode in data_dict:
+        _small_data_dict = data_dict[mode]
+    else:
+        data_dict[mode] = {}
+        _small_data_dict = data_dict[mode]
+
+    for k, v in add_dict.items():
+        if k in _small_data_dict:
+            _small_data_dict[k].append(v)
+        else:
+            _small_data_dict[k] = [v]
+
+    if 'args' in data_dict:
+        if is_save:
+            file_path = data_dict['args'].log_data_file
+            print(f'log_data save to {file_path}')
+            with open(file_path, 'wb') as log_out:
+                pickle.dump(data_dict, log_out)
+    else:
+        raise Exception('ERROR: argsをlog_dataに入れておいてください')
+
+
 def train_raml(args):
     tau = args.temp
 
@@ -339,6 +400,8 @@ def train_raml(args):
     dev_data_src = read_corpus(args.dev_src, source='src')
     dev_data_tgt = read_corpus(args.dev_tgt, source='tgt')
     dev_data = list(zip(dev_data_src, dev_data_tgt))
+
+    dev_data = dev_data[:args.dev_limit]
 
     vocab, model, optimizer, nll_loss, cross_entropy_loss = init_training(args)
 
@@ -359,7 +422,22 @@ def train_raml(args):
     cum_examples = cum_batches = report_examples = epoch = valid_num = best_model_iter = 0
     hist_valid_scores = []
     train_time = begin_time = time.time()
-    print('begin RAML training')
+    _info = f"""
+        begin RAML training
+        ・学習：{len(train_data)}ペア, {args.train_log_file}
+        ・テスト：{len(dev_data)}ペア, {args.valid_niter}iter毎 {args.validation_log_file}
+        ・バッチサイズ：{args.batch_size}
+        ・1epoch = {len(train_data)}ペア = {int(len(train_data)/args.batch_size)}iter
+        """
+    print(_info)
+
+    log_data = {'args': args}
+
+    if args.notify_slack:
+        slack.post(f"""
+        {_info}
+        {args}
+        """)
 
     # smoothing function for BLEU
     sm_func = None
@@ -502,19 +580,32 @@ def train_raml(args):
                 cum_examples += batch_size
                 cum_batches += batch_size
 
-                if train_iter % args.log_every == 0:
+                if train_iter % args.log_every == 0 or train_iter % args.notify_slack_every == 0:
                     _log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (
-                    epoch, train_iter,
-                    report_weighted_loss / report_examples,
-                    np.exp(report_loss / report_tgt_words),
-                    cum_examples,
-                    report_tgt_words / (time.time() - train_time),
-                    time.time() - begin_time)
+                        epoch, train_iter,
+                        report_weighted_loss / report_examples,
+                        np.exp(report_loss / report_tgt_words),
+                        cum_examples,
+                        report_tgt_words / (time.time() - train_time),
+                        time.time() - begin_time)
                     print(_log)
                     print(_log, file=train_output)
 
+                    _list_dict_update(log_data, {
+                        'epoch': epoch,
+                        'train_iter': train_iter,
+                        'loss': report_weighted_loss / report_examples,
+                        'ppl': np.exp(report_loss / report_tgt_words),
+                        'examples': cum_examples,
+                        'speed': report_tgt_words / (time.time() - train_time),
+                        'elapsed': time.time() - begin_time
+                    }, 'train')
+
                     train_time = time.time()
                     report_loss = report_weighted_loss = report_tgt_words = report_examples = 0.
+                    if train_iter % args.notify_slack_every == 0 and args.notify_slack:
+                        print('post slack')
+                        slack.post(_log)
 
                 # perform validation
                 if train_iter % args.valid_niter == 0:
@@ -547,11 +638,25 @@ def train_raml(args):
                             train_iter, dev_ppl, args.valid_metric, valid_metric)
                         print(_log)
                         print(_log, file=validation_output)
+                        if args.notify_slack:
+                            slack.post(_log)
 
                     else:
                         valid_metric = -dev_ppl
                         print('validation: iter %d, dev. ppl %f' % (train_iter, dev_ppl),
                               file=sys.stderr)
+
+                    if 'dev_data' in log_data:
+                        log_data['dev_data'] = dev_data
+
+                    _list_dict_update(log_data, {
+                        'epoch': epoch,
+                        'train_iter': train_iter,
+                        'loss': dev_loss,
+                        'ppl': dev_ppl,
+                        args.valid_metric: valid_metric,
+                        'hyps': dev_hyps,
+                    }, 'validation', is_save=True)
 
                     model.train()
 
@@ -582,8 +687,14 @@ def train_raml(args):
                         patience += 1
                         print('hit patience %d' % patience)
                         if patience == args.patience:
-                            print('early stop!')
-                            print('the best model is from iteration [%d]' % best_model_iter)
+                            _log = f"""
+                            {'hit patience %d' % patience}
+                            early stop!
+                            {'the best model is from iteration [%d]' % best_model_iter}
+                            """
+                            print(_log)
+                            if args.notify_slack:
+                                slack.post(_log)
                             exit(0)
 
                 if args.debug:
@@ -687,7 +798,8 @@ def compute_lm_prob(args):
     model.eval()
 
     if args.cuda:
-        model = nn.DataParallel(model).cuda()
+        # model = nn.DataParallel(model).cuda()
+        model = model.cuda()
 
     f = open(args.save_to_file, 'w')
     for src_sent, tgt_sent in test_data:
@@ -746,6 +858,7 @@ def test(args):
     model.eval()
 
     if args.cuda:
+        # model = nn.DataParallel(model).cuda()
         model = model.cuda()
 
     hypotheses = decode(model, test_data)
@@ -790,6 +903,7 @@ def interactive(args):
     model.eval()
 
     if args.cuda:
+        # model = nn.DataParallel(model).cuda()
         model = model.cuda()
 
     while True:
@@ -821,6 +935,7 @@ def sample(args):
     model.eval()
 
     if args.cuda:
+        # model = nn.DataParallel(model).cuda()
         model = model.cuda()
 
     print('begin sampling')

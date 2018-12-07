@@ -580,7 +580,7 @@ def train_raml(args):
                 cum_examples += batch_size
                 cum_batches += batch_size
 
-                if train_iter % args.log_every == 0:
+                if train_iter % args.log_every == 0 or train_iter % args.notify_slack_every == 0:
                     _log = 'epoch %d, iter %d, avg. loss %.2f, avg. ppl %.2f cum. examples %d, speed %.2f words/sec, time elapsed %.2f sec' % (
                         epoch, train_iter,
                         report_weighted_loss / report_examples,
@@ -604,6 +604,7 @@ def train_raml(args):
                     train_time = time.time()
                     report_loss = report_weighted_loss = report_tgt_words = report_examples = 0.
                     if train_iter % args.notify_slack_every == 0 and args.notify_slack:
+                        print('post slack')
                         slack.post(_log)
 
                 # perform validation

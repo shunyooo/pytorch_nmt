@@ -185,8 +185,8 @@ def train(args):
 
     _info = f"""
         begin Maximum Likelihood training
-        ・学習データ：{len(train_data)}ペア
-        ・テストデータ：{len(dev_data)}ペア
+        ・学習：{len(train_data)}ペア, {args.train_log_file}
+        ・テスト：{len(dev_data)}ペア, {args.valid_niter}iter毎 {args.validation_log_file}
         ・バッチサイズ：{args.batch_size}
         ・1epoch = {len(train_data)}ペア = {int(len(train_data)/args.batch_size)}iter
         """
@@ -424,8 +424,8 @@ def train_raml(args):
     train_time = begin_time = time.time()
     _info = f"""
         begin RAML training
-        ・学習データ：{len(train_data)}ペア
-        ・テストデータ：{len(dev_data)}ペア
+        ・学習：{len(train_data)}ペア, {args.train_log_file}
+        ・テスト：{len(dev_data)}ペア, {args.valid_niter}iter毎 {args.validation_log_file}
         ・バッチサイズ：{args.batch_size}
         ・1epoch = {len(train_data)}ペア = {int(len(train_data)/args.batch_size)}iter
         """
